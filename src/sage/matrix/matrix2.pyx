@@ -14055,11 +14055,10 @@ cdef class Matrix(Matrix1):
                 C = L.change_ring(AA)
             except ValueError:  # cannot coerce...
                 C = L.change_ring(F_ac)
-        else:
-            C = L.__copy__()
-        if C is L:
-            # change_ring() returns the cached (immutable) "L" itself
-            # if the ring did not change, and we are about to modify "C".
+        if C is None or C is L:
+            # Either we did not extend, or change_ring() returned the
+            # cached (immutable) "L" itself because the ring did not
+            # change. We are about to modify "C", so we need a copy.
             C = L.__copy__()
 
         cdef Py_ssize_t i  # loop index
