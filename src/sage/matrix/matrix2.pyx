@@ -15113,7 +15113,8 @@ cdef class Matrix(Matrix1):
             in a way that represents the `n`-by-`n` permutation matrix
             `P`,
           * The matrix ``L``, which is cached and hence immutable,
-          * A list of the block-diagonal entries of ``D``.
+          * A list of the block-diagonal entries of ``D``, which are
+            cached and hence immutable.
 
         This is mainly useful to avoid having to "undo" the
         construction of the matrix `D` when we don't need it. For
@@ -15158,6 +15159,8 @@ cdef class Matrix(Matrix1):
         ring = self.base_ring().fraction_field()
 
         cdef Matrix A  # A copy of the input matrix
+        cdef Matrix E  # Top-left diagonal block
+
         if self.base_ring() == ring:
             A = self.__copy__()
         else:
@@ -15202,6 +15205,7 @@ cdef class Matrix(Matrix1):
         # matrix in "d" to let block_diagonal_matrix() know what its
         # base ring should be.
         if n == 0:
+            A.set_immutable()
             d.append(A)
 
         k = 0
@@ -15219,7 +15223,9 @@ cdef class Matrix(Matrix1):
                 # meaningless. The corresponding entry of "L" will be
                 # fixed later (since it's an on-diagonal element, it gets
                 # set to one eventually).
-                d.append(one_by_one_space(A_kk))
+                E = one_by_one_space(A_kk)
+                E.set_immutable()
+                d.append(E)
                 k += 1
                 continue
 
@@ -15229,7 +15235,9 @@ cdef class Matrix(Matrix1):
                     # It's a back door that lets us escape with only the standard non-block
                     # non-pivoting LDL^T factorization. This allows us to implement e.g.
                     # indefinite_factorization() in terms of this method.
-                    d.append(one_by_one_space(A_kk))
+                    E = one_by_one_space(A_kk)
+                    E.set_immutable()
+                    d.append(E)
                     _block_ldlt_pivot1x1(A, k)
                     k += 1
                     continue
@@ -15266,7 +15274,9 @@ cdef class Matrix(Matrix1):
                 # the 1x1 pivot "a" in the top-left position. The entry "a"
                 # will be adjusted to "1" later on to ensure that "L" is
                 # (block) unit-lower-triangular.
-                d.append(one_by_one_space(A_kk))
+                E = one_by_one_space(A_kk)
+                E.set_immutable()
+                d.append(E)
                 k += 1
                 continue
 
@@ -15278,7 +15288,9 @@ cdef class Matrix(Matrix1):
                 # otherwise. We are performing a 1x1 pivot, but the
                 # rows/columns are already where we want them, so nothing
                 # needs to be permuted.
-                d.append(one_by_one_space(A_kk))
+                E = one_by_one_space(A_kk)
+                E.set_immutable()
+                d.append(E)
                 _block_ldlt_pivot1x1(A, k)
                 k += 1
                 continue
@@ -15302,7 +15314,9 @@ cdef class Matrix(Matrix1):
 
             if A_kk.abs()*omega_r >= alpha*(omega_1**2):
                 # Step (2) in Higham or Step (4) in B&K.
-                d.append(one_by_one_space(A_kk))
+                E = one_by_one_space(A_kk)
+                E.set_immutable()
+                d.append(E)
                 _block_ldlt_pivot1x1(A, k)
                 k += 1
                 continue
@@ -15312,7 +15326,9 @@ cdef class Matrix(Matrix1):
                 # This is Step (3) in Higham or Step (5) in B&K. Still
                 # a 1x1 pivot, but this time we need to swap
                 # rows/columns k and r.
-                d.append(one_by_one_space(A_rr))
+                E = one_by_one_space(A_rr)
+                E.set_immutable()
+                d.append(E)
                 A.swap_columns_c(k, r)
                 A.swap_rows_c(k, r)
                 p_k = p[k]
@@ -15335,6 +15351,7 @@ cdef class Matrix(Matrix1):
             # The top-left 2x2 submatrix (starting at position k,k) is
             # now our pivot.
             E = A[k:k+2, k:k+2]
+            E.set_immutable()
             d.append(E)
 
             C = A[k+2:n, k:k+2]
@@ -15438,7 +15455,8 @@ cdef class Matrix(Matrix1):
           * `D` is a block-diagonal matrix whose blocks are of size
             one or two.
 
-        The matrix `L` is cached, hence immutable.
+        The matrix `L` is cached, hence immutable. So is `D` when it
+        consists of a single block.
 
         With ``classical=True``, the permutation matrix `P` is always
         an identity matrix and the diagonal blocks are always
@@ -15716,13 +15734,16 @@ cdef class Matrix(Matrix1):
             [2 0]
             [1 2]
 
-        The matrix `D` is a new matrix even when it has only one block::
+        With only one diagonal block, `D` is that cached block::
 
             sage: A = matrix(QQ, [[3]])
             sage: P,L,D = A.block_ldlt()
+            sage: D.is_immutable()
+            True
             sage: D[0, 0] = -100
-            sage: A.block_ldlt()[2]
-            [3]
+            Traceback (most recent call last):
+            ...
+            ValueError: matrix is immutable; please change a copy instead...
             sage: A.is_positive_definite()
             True
             sage: matrix(QQ, 0, 0).block_ldlt()
@@ -15737,11 +15758,8 @@ cdef class Matrix(Matrix1):
         # Warning: when n == 0, this works, but returns a matrix
         # whose (nonexistent) entries are in ZZ rather than in
         # the base ring of P and L. Problematic? Who knows.
-        # Copy the blocks, since block_diagonal_matrix() returns (and
-        # subdivides) the block itself when there is only one, and the
-        # blocks belong to the cached factorization.
         from sage.matrix.constructor import block_diagonal_matrix
-        D = block_diagonal_matrix([X.__copy__() for X in d])
+        D = block_diagonal_matrix(d)
 
         return (P, L, D)
 
